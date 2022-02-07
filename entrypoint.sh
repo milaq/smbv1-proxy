@@ -3,9 +3,13 @@
 PROXY_DIR=/srv/smbproxy
 PROXY_LOCAL_USERS="smbproxy"
 
+if [[ -z $PROXY_REMOTE_SMB_VERSION ]]; then
+  PROXY_REMOTE_SMB_VERSION=default
+fi
+
 mkdir "$PROXY_DIR"
 chattr +i "$PROXY_DIR"
-mount -t cifs //$PROXY_SERVER/$PROXY_SHARENAME -o username="$PROXY_USER",domain="$PROXY_DOMAIN",password="$PROXY_PASSWORD",iocharset=utf8 $PROXY_DIR
+mount -t cifs //$PROXY_SERVER/$PROXY_SHARENAME -o username="$PROXY_USER",domain="$PROXY_DOMAIN",password="$PROXY_PASSWORD",iocharset=utf8,vers="$PROXY_REMOTE_SMB_VERSION" $PROXY_DIR
 if [[ $? -ne 0 ]]; then
   echo "Error: Mounting remote share failed"
   exit 1
