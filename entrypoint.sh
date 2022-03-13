@@ -4,8 +4,12 @@ PROXY_DIR=/srv/smbproxy
 PROXY_ARCHIVE=${PROXY_DIR}_archive
 
 function watch_proxy_dir() {
-  mkdir -p "$PROXY_DIR"
-  mkdir -p "$PROXY_ARCHIVE"
+  mkdir "$PROXY_DIR"
+  if [[ $? -ne 0 ]]; then
+    echo "Error: Could not create proxy dir or it already exists (did you mount it inside the container without specifying the local proxy UID?)"
+    exit 1
+  fi
+  mkdir "$PROXY_ARCHIVE"
 
   echo "Getting remote folder list"
   folderlist=$(smbclient //$PROXY_SERVER/$PROXY_SHARENAME -U $PROXY_USER%$PROXY_PASSWORD -c "recurse; ls")
@@ -52,11 +56,26 @@ function start_proxy_smb() {
 rm /etc/samba/smb.conf
 cp /etc/samba/smb.conf.preset /etc/samba/smb.conf
 
-useradd -d /nonexistent -M -s /usr/sbin/nologin -g "nogroup" "${PROXY_USER}"
+start_sync=0
+if [[ -d $PROXY_DIR ]] && [[ -n $PROXY_USER_UID ]]; then
+  if [[ -z $PROXY_USER_GID ]]; then
+    PROXY_USER_GID=$PROXY_USER_UID
+  fi
+  echo "Mounted proxy directory and set proxy user IDs detected. Using ${PROXY_USER_UID}:${PROXY_USER_GID} for files."
+  groupadd -g $PROXY_USER_GID proxyuser
+  useradd -d /nonexistent -M -s /usr/sbin/nologin -u $PROXY_USER_UID -g proxyuser "${PROXY_USER}"
+else
+  echo "Using smbclient syncing"
+  start_sync=1
+  useradd -d /nonexistent -M -s /usr/sbin/nologin -g nogroup "${PROXY_USER}"
+fi
 echo -e "[$PROXY_SHARENAME]\npath = $PROXY_DIR\nwriteable = yes\nbrowseable = yes\n" >> /etc/samba/smb.conf
 (echo "$PROXY_PASSWORD"; echo "$PROXY_PASSWORD") | smbpasswd -s -a "${PROXY_USER}"
 
-watch_proxy_dir &
-start_proxy_smb &
 trap "exit 1" SIGCHLD
+if [[ $start_sync -eq 1 ]]; then
+  watch_proxy_dir &
+fi
+start_proxy_smb &
+
 wait
