@@ -8,7 +8,8 @@ COPY dpkg_excludes /etc/dpkg/dpkg.cfg.d/excludes
 
 RUN apt-get update && apt-get install --no-install-recommends -y \
     samba \
-    cifs-utils \
+    smbclient \
+    inotify-tools \
     && \
     apt-get clean
 
